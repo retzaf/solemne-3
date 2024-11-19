@@ -88,13 +88,16 @@ ax.set_ylabel('Autor')
 st.pyplot(fig)
 
 # Distribución de calificaciones
+color_input_1 = st.sidebar.color_picker("selecciona un color para el primer gráfico", '#00f900')
+color_input_2 = st.sidebar.color_picker("ahora para el segundo gráfico", '#ff5733')
+
 st.subheader('Distribución de Calificaciones de Libros')
 fig, ax = plt.subplots(figsize=(10, 6))
 sns.histplot(books['Rating'], bins=bins, kde=True, color='blue', ax=ax)
 ax.set_title('Distribución de Calificaciones')
 ax.set_xlabel('Calificación')
 st.pyplot(fig)
-color_input_1 = st.sidebar.color_picker("selecciona un color para el primer gráfico", '#00f900')
+
 # Matriz de correlación
 st.subheader('Matriz de Correlación')
 fig, ax = plt.subplots(figsize=(8, 6))
