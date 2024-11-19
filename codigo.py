@@ -4,105 +4,108 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import streamlit as st
 
+# Configuración de la página de Streamlit
+st.set_page_config(page_title='Análisis de Libros', layout='wide')
+st.title('Análisis de los Mejores Libros de la Década 2330')
 
-# Leer CSV con manejo de errores
-book = pd.read_csv('books_of_the_decade.csv')
-user_reviews = pd.read_csv('user_reviews_dataset.csv')
+# Introducción
+st.markdown("""
+### Base de datos: Mejores Libros de la Década 2330
+Esta aplicación se basa en una encuesta realizada a **600,000 lectores** para rankear los libros más destacados de la década.
+""")
 
+# Cargar archivos CSV con manejo de errores
+try:
+    book = pd.read_csv('books_of_the_decade.csv')
+    user_reviews = pd.read_csv('user_reviews_dataset.csv')
+    st.success('¡Datos cargados correctamente!')
+except FileNotFoundError as e:
+    st.error(f"Error al cargar los datos: {e}")
+    st.stop()
+
+# Fusionar datasets
 books = pd.merge(user_reviews, book, left_on='bookIndex', right_on='Index', how='inner')
-print(books.head(10))
 
+# Mostrar los 10 mejores libros
+st.subheader('Top 10 Libros de la Década por Puntaje')
 top_ten_books = book.sort_values(by='Score', ascending=False).head(10)
-print(top_ten_books)
+st.dataframe(top_ten_books)
 
-top_ten_books_vote = book.sort_values(by='Number of Votes', ascending=False).head(10)
-print(top_ten_books_vote)
+# Añadir opciones de búsqueda por autor o por libro
+st.sidebar.title('Búsqueda de Libros y Autores')
+search_option = st.sidebar.radio('Buscar por:', ('Autor', 'Libro'))
 
+if search_option == 'Autor':
+    author_name = st.sidebar.text_input('Ingrese el nombre del autor')
+    if author_name:
+        filtered_books = books[books['Author'].str.contains(author_name, case=False, na=False)]
+        st.subheader(f'Resultados de búsqueda para el autor: {author_name}')
+        st.dataframe(filtered_books)
+else:
+    book_name = st.sidebar.text_input('Ingrese el nombre del libro')
+    if book_name:
+        filtered_books = books[books['Book Name'].str.contains(book_name, case=False, na=False)]
+        st.subheader(f'Resultados de búsqueda para el libro: {book_name}')
+        st.dataframe(filtered_books)
+
+# Limpieza de datos
 books['Rating'] = pd.to_numeric(books['Rating'], errors='coerce')
 books['Number of Votes'] = pd.to_numeric(books['Number of Votes'], errors='coerce')
-# Filling null values in 'Rating' with the median rating
 median_rating = books['Rating'].median()
 books['Rating'].fillna(median_rating, inplace=True)
-
-# Filling null values in 'Number of Votes' with 0
 books['Number of Votes'].fillna(0, inplace=True)
-books['Book Name'].value_counts()
-book_authors=books['Author'].value_counts()
-print(book_authors)
 
-# Authors with more than one books
-author_counts = books['Author'].value_counts()
+# Parámetros de visualización interactivos
+st.sidebar.title('Configuraciones de Visualización')
+bins = st.sidebar.slider('Número de Bins para la Distribución de Calificaciones', min_value=5, max_value=50, value=10, step=1)
+color_palette = st.sidebar.selectbox('Selecciona una Paleta de Colores', ['viridis', 'plasma', 'inferno', 'magma', 'cividis', 'Blues', 'Greens', 'Purples'])
 
-multiple_books_authors = author_counts[author_counts > 1].index
-filtered_books = books[books['Author'].isin(multiple_books_authors)]
-print(len(multiple_books_authors))
-
+# Estadísticas de autores
 author_stats = (
     books.groupby('Author')
     .agg(
-        number_of_books=('Book Name', 'count'),   # Count the number of books per author
-        total_score=('Score', 'sum')              # Sum the scores of each author's books
+        number_of_books=('Book Name', 'count'),
+        total_score=('Score', 'sum')
     )
     .reset_index()
 )
 
+# Mejores autores por puntaje total
 top_authors = author_stats.sort_values(by='total_score', ascending=False)
+st.subheader('Autores Más Vendidos por Puntaje Total')
+st.dataframe(top_authors[['Author', 'number_of_books', 'total_score']].head(10))
 
-print('Best seller authors by total score:')
-top_authors[['Author', 'number_of_books', 'total_score']].head(10)
-author_stats = (
-    books.groupby('Author')
-    .agg(
-        number_of_books=('Book Name', 'count'),   # Count the number of books per author
-        total_score=('Score', 'sum')              # Sum the scores of each author's books
-    )
-    .reset_index()
-)
-
-top_authors = author_stats.sort_values(by='total_score', ascending=False)
-
-print('Best seller authors by total score:')
-top_authors[['Author', 'number_of_books', 'total_score']].head(10)
-
+# Gráfico interactivo de los mejores autores por puntaje total
+st.subheader('Gráfico de los 10 Mejores Autores por Puntaje Total')
 top_auth = top_authors['Author'].head(10)
-top_scr= top_authors['total_score'].head(10)
+top_scr = top_authors['total_score'].head(10)
 
-plt.figure(figsize=(10, 6))
-sns.barplot(x=top_scr.values, y=top_auth.values , palette='viridis')
-plt.title('Top 10 Authors by Total Score')
-plt.xlabel('Total_score')
-plt.ylabel('Author')
-plt.show()
+fig, ax = plt.subplots(figsize=(10, 6))
+sns.barplot(x=top_scr.values, y=top_auth.values, palette=color_palette, ax=ax)
+ax.set_title('Top 10 Autores por Puntaje Total')
+ax.set_xlabel('Puntaje Total')
+ax.set_ylabel('Autor')
+st.pyplot(fig)
 
-print("Best seller authors by Number of books in the data:")
+# Distribución de calificaciones
+st.subheader('Distribución de Calificaciones de Libros')
+fig, ax = plt.subplots(figsize=(10, 6))
+sns.histplot(books['Rating'], bins=bins, kde=True, color='blue', ax=ax)
+ax.set_title('Distribución de Calificaciones')
+ax.set_xlabel('Calificación')
+st.pyplot(fig)
 
-top_author_by_books = author_stats.sort_values(by='number_of_books', ascending=False)
-top_author_by_books
+# Matriz de correlación
+st.subheader('Matriz de Correlación')
+fig, ax = plt.subplots(figsize=(8, 6))
+sns.heatmap(books[['Rating', 'Number of Votes', 'Score']].corr(), annot=True, cmap='coolwarm', ax=ax)
+ax.set_title('Matriz de Correlación')
+st.pyplot(fig)
 
-top_author_by_books = books['Author'].value_counts().head(10)
-plt.figure(figsize=(10, 6))
-sns.barplot(x=top_author_by_books.values, y=top_author_by_books.index, palette='viridis')
-plt.title('Top 10 Authors by Number of Books')
-plt.xlabel('Number of Books')
-plt.ylabel('Author')
-plt.show()
-
-plt.figure(figsize=(10, 6))
-sns.histplot(books['Rating'], kde=True, color='blue')
-plt.title('Distribution of Book Ratings')
-plt.xlabel('Rating')
-plt.show()
-
-
-plt.figure(figsize=(8, 6))
-sns.heatmap(books[['Rating', 'Number of Votes', 'Score']].corr(), annot=True, cmap='coolwarm')
-plt.title('Correlation Matrix')
-plt.show()
-
+# Gráfico de torta interactivo para autores
+st.subheader('Distribución de los 10 Autores Principales por Cantidad de Libros')
+fig, ax = plt.subplots(figsize=(8, 8))
 author_counts = books['Author'].value_counts().head(10)
-
-# Plot the pie chart
-plt.figure(figsize=(8, 8))
-plt.pie(author_counts, labels=author_counts.index, autopct='%1.1f%%', startangle=140)
-plt.title('Distribution of Ratings')
-plt.show()
+ax.pie(author_counts, labels=author_counts.index, autopct='%1.1f%%', startangle=140)
+ax.set_title('Distribución de los 10 Autores Principales por Cantidad de Libros')
+st.pyplot(fig)
