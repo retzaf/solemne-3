@@ -2,13 +2,12 @@ import pandas as pd
 import streamlit as st
 import random
 import os
-import requests  # Importa la librería para hacer solicitudes HTTP
-
+import httpx  # Usar httpx para interactuar con la API de Google Books
+import asyncio  # Para manejar funciones asincrónicas en Streamlit
 
 # Función para generar un ID único de usuario
 def generate_user_id():
     return random.randint(100000, 999999)
-
 
 # Función para guardar la calificación en el archivo `user_reviews_dataset.csv` usando bookIndex
 def save_rating(user_id, book_index, rating):
@@ -35,28 +34,41 @@ def save_rating(user_id, book_index, rating):
     # Guardar en el archivo CSV de reviews actualizado
     reviews_df.to_csv('user_reviews_dataset.csv', index=False)
 
-
-# Función para buscar información adicional del libro en Google Books API
-def buscar_info_libro(titulo):
-    API_KEY = 'AIzaSyAlphYNrVCczIEElfxjxMx1OfXPh_Z1kCc'
-    url = f"https://www.googleapis.com/books/v1/volumes?q={titulo}&key={API_KEY}"
-
+# Función para buscar información adicional del libro usando la API de Google Books con httpx
+async def buscar_info_libro_google(titulo):
     try:
-        response = requests.get(url)
-        data = response.json()
+        # Agregar tu clave API de Google Books aquí
+        API_KEY = 'AIzaSyAlphYNrVCczIEElfxjxMx1OfXPh_Z1kCc'  # Sustituye con tu clave API real
 
+        # Usar httpx para hacer una solicitud asincrónica a Google Books API
+        async with httpx.AsyncClient() as client:
+            url = f"https://www.googleapis.com/books/v1/volumes?q={titulo}&key={API_KEY}"
+            response = await client.get(url)
+            data = response.json()
+
+        # Verificar si se encontró algún resultado
         if 'items' in data and len(data['items']) > 0:
-            libro_info = data['items'][0]['volumeInfo']
+            libro_info = data['items'][0]['volumeInfo']  # Obtener la primera coincidencia
             caratula = libro_info.get('imageLinks', {}).get('thumbnail', None)
             resumen = libro_info.get('description', 'No hay resumen disponible.')
 
-            return caratula, resumen
+            # Si se encontró una carátula, usarla
+            if caratula:
+                caratula_url = caratula
+            else:
+                caratula_url = None
+
+            return caratula_url, resumen
         else:
             return None, "No se encontró información adicional."
     except Exception as e:
         return None, f"Error al buscar información del libro: {e}"
 
+# Función para ejecutar la búsqueda sincrónica usando asyncio
+def obtener_info_libro_google(titulo):
+    return asyncio.run(buscar_info_libro_google(titulo))
 
+# Llamada al show() para manejar la interfaz en Streamlit
 def show():
     # Cargar los datos
     try:
@@ -104,8 +116,8 @@ def show():
                     st.write(f"**Puntuación:** {book_details['Score']}")
                     st.write(f"**Calificación Media:** {book_details['Rating']}")
 
-                    # Buscar carátula y resumen del libro en la API
-                    caratula, resumen = buscar_info_libro(book_details['Book Name'])
+                    # Buscar carátula y resumen del libro en Google Books
+                    caratula, resumen = obtener_info_libro_google(book_details['Book Name'])
                     if caratula:
                         st.image(caratula, caption="Carátula del libro")
                     st.write(f"**Resumen:** {resumen}")
@@ -148,8 +160,8 @@ def show():
                     st.write(f"**Puntuación:** {book_details['Score']}")
                     st.write(f"**Calificación Media:** {book_details['Rating']}")
 
-                    # Buscar carátula y resumen del libro en la API
-                    caratula, resumen = buscar_info_libro(book_details['Book Name'])
+                    # Buscar carátula y resumen del libro en Google Books
+                    caratula, resumen = obtener_info_libro_google(book_details['Book Name'])
                     if caratula:
                         st.image(caratula, caption="Carátula del libro")
                     st.write(f"**Resumen:** {resumen}")
